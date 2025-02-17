@@ -2,7 +2,7 @@
 Final Project for DATA607: Communcations for Data Science for MS in Data Science
 
 ## Overview:
-Final Project with code written in R and final paper written in LaTeX to Cluster US States using a combination of COVID Statistics.
+Clustering US States using a combination of COVID Statistics. Code written in R and final paper written in LaTeX.
 
 ## Contents
 * [`Final Report`](./DATA607_Final_Project_Powell-120456237.pdf): Final Report showing findings and conclusions
