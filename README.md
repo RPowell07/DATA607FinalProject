@@ -1,5 +1,5 @@
 # Clustering US States on COVID-19 Restrictions
-DATA607: Communcations for Data Science Final Project for MS in Data Science; Rick Powell
+Final Project for DATA607: Communcations for Data Science for MS in Data Science
 
 ## Overview:
 Final Project with code written in R and final paper written in LaTeX to Cluster US States using a combination of COVID Statistics.
