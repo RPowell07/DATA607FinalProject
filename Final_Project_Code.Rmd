@@ -1,0 +1,746 @@
+---
+title: "DATA607 Final Project Code"
+author: "Rick Powell"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+bibliography: references.bib
+nocite: '@*'
+---
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+# This extracts worldwide COVID19 data by state
+# install.packages("COVID19") <-- package already installed
+library("COVID19")
+library(tidyverse)
+library(sf)
+library(dplyr)
+library(pheatmap)
+library(RColorBrewer)
+```
+
+
+# Intro
+
+Originally this was my Storyboard, however, I've made a bunch of changes so I wanted to keep the graphs and information here, but some of the graphs and/or text either doesn't apply, or is outdated.
+
+```{r, echo=TRUE}
+df_state <- covid19(level = 2, verbose = FALSE)
+df_country <- covid19(level = 1, verbose = FALSE)
+df_us_states <- subset(df_state, administrative_area_level_1 == "United States")
+```
+
+# Cleaning to get the Columns we want to look at for the US States.
+
+```{r, echo=TRUE, warning=FALSE}
+df_us_states <- df_us_states %>%
+  select(date, confirmed, deaths, recovered, tests, vaccines, 
+         school_closing, workplace_closing, stay_home_restrictions, 
+         facial_coverings, administrative_area_level_1, 
+         administrative_area_level_2, population)
+
+# Take the absolute value of these columns and replace original values
+columns_to_fix <- c("school_closing", "workplace_closing", "stay_home_restrictions", "facial_coverings")
+
+df_us_states <- df_us_states %>%
+  mutate(across(all_of(columns_to_fix), abs))
+```
+
+```{r, echo=TRUE, warning=FALSE}
+# Remove these territories from the data set
+df_us_states <- df_us_states %>%
+  filter(!administrative_area_level_2 %in% c("Northern Mariana Islands", 
+                                             "Virgin Islands", 
+                                             "Guam", 
+                                             "American Samoa", 
+                                             "Puerto Rico"))
+```
+
+
+# Country Level
+
+```{r, echo=TRUE, warning=FALSE}
+# Filter data for the United States
+df_filtered <- df_country[df_country$administrative_area_level_1 == "United States",]
+
+# Create time series plot
+ggplot(df_filtered, aes(x = date, y = confirmed)) +
+  geom_line(color = "blue") + 
+  labs(title = "Confirmed Cases Over Time in the United States", 
+       x = "Date", 
+       y = "Confirmed Cases") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_date(date_labels = "%Y",
+               date_breaks = "1 year",
+               limits = as.Date(c("2020-01-01", "2023-06-30")))
+```
+
+Starting with Cases over Time for US. The focus of this project will be on the US, so I want to set some baseline of how the US compares overall. I probably won't use this first graph, but it's nice to have.
+
+
+```{r, echo=TRUE, warning=FALSE}
+# Create time series plot
+ggplot(df_filtered, aes(x = date, y = deaths)) +
+  geom_line(color = "blue") + 
+  labs(title = "Covid Deaths Over Time in the United States", 
+       x = "Date", 
+       y = "Deaths") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_date(date_labels = "%Y",
+               date_breaks = "1 year",
+               limits = as.Date(c("2020-01-01", "2023-06-30")))
+```
+
+```{r, echo=TRUE, warning=FALSE, fig.width=10, fig.height=4}
+# Filter the data for the United States
+df_filtered <- df_country[df_country$administrative_area_level_1 == "United States",]
+
+# Reshape data into long format
+df_long <- df_filtered %>%
+  select(date, confirmed, deaths, vaccines) %>%
+  pivot_longer(
+    cols = c(confirmed, deaths, vaccines),
+    names_to = "metric",
+    values_to = "count"
+  )
+
+# Create faceted plot
+ggplot(df_long, aes(x = date, y = count)) +
+  geom_line(aes(color = metric), size = 1) +
+  labs(
+    title = "COVID-19 Metrics Over Time in the United States",
+    x = "Date",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none" 
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_date(
+    date_labels = "%Y",
+    date_breaks = "1 year",
+    limits = as.Date(c("2020-01-01", "2023-06-30"))
+  ) +
+  facet_wrap(~metric, scales = "free_y", ncol = 3) +
+  scale_color_manual(
+    values = c("confirmed" = "blue", "deaths" = "red", "vaccines" = "green")
+  )
+```
+
+
+# State Level
+
+```{r, echo=TRUE, warning=FALSE}
+ggplot(df_us_states, aes(x = date, y = confirmed, color = administrative_area_level_2)) +
+  geom_line() +  
+  labs(title = "Confirmed Covid Cases Over Time by US State", 
+       x = "Date", 
+       y = "Confirmed Cases") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+       legend.position = "none" ) +
+  scale_x_date(date_labels = "%Y",
+               date_breaks = "1 year",
+               limits = as.Date(c("2020-01-01", "2023-06-30")))
+```
+
+```{r, echo=TRUE, warning=FALSE}
+ggplot(df_us_states, aes(x = date, y = (confirmed / population), color = administrative_area_level_2)) +
+  geom_line() +  
+  labs(title = "Confirmed Covid Cases by Population Over Time by US State", 
+       x = "Date", 
+       y = "Confirmed Cases") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+       legend.position = "none" ) +
+  scale_x_date(date_labels = "%Y",
+               date_breaks = "1 year",
+               limits = as.Date(c("2020-01-01", "2023-06-30")))
+```
+
+Here's that same graph showing cases over population. Fewer standouts, but very cluttered.
+
+```{r, echo=TRUE, warning=FALSE}
+# Calculate the US average for confirmed cases per population by date
+us_average <- aggregate((confirmed / population) ~ date, data = df_us_states, mean, na.rm = TRUE)
+colnames(us_average) <- c("date", "confirmed_per_population")
+
+# Update state group for coloring (highlight selected states)
+highlight_states <- c("North Carolina")
+df_us_states$state_group <- ifelse(df_us_states$administrative_area_level_2 %in% highlight_states, 
+                                    df_us_states$administrative_area_level_2, "Other")
+
+# Create the plot
+ggplot() +
+  # Add state-level lines
+  geom_line(data = df_us_states, 
+            aes(x = date, y = (confirmed / population), 
+                color = state_group, group = administrative_area_level_2), 
+            size = 1, alpha = 0.7) +
+  # Labels and theme
+  labs(title = "Confirmed Covid Cases by Population Over Time by US State", 
+       x = "Date", 
+       y = "Confirmed Cases per Population") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_date(date_labels = "%Y",
+               date_breaks = "1 year",
+               limits = as.Date(c("2020-01-01", "2023-06-30"))) +
+  # Custom colors for states and US average
+  scale_color_manual(values = c("North Carolina" = "blue", 
+                                 "Other" = "gray"),
+                     breaks = c("North Carolina"),
+                     labels = c("North Carolina")) +
+  guides(color = guide_legend(title = "State"))
+```
+Originally this graph showed the US Average with a couple of the high and low data, but I re-used it to see North Carolina, which appeared as a stand alone cluster in an earlier try. I'm not using this.
+
+```{r, echo=TRUE, warning=FALSE}
+df_us_states$facial_coverings_group <- factor(df_us_states$facial_coverings,
+                                              levels = 0:4,
+                                              labels = c("No Policy", 
+                                                         "Recommended", 
+                                                         "Required in Some Spaces", 
+                                                         "Required in All Shared Spaces", 
+                                                         "Required Outside Home"))
+
+july_and_jan_data <- df_us_states %>%
+  filter(date %in% as.Date(c("2020-07-01", "2021-01-01", "2021-07-01", 
+                            "2022-01-01", "2022-07-01"))) %>%
+  select(administrative_area_level_2, date, facial_coverings_group)
+
+# Load map data for U.S. states
+us_states <- map_data("state") 
+
+# Convert state names to lowercase
+july_and_jan_data$administrative_area_level_2 <- tolower(july_and_jan_data$administrative_area_level_2)
+
+# Merge policy data with map data
+map_data_combined <- us_states %>%
+  left_join(july_and_jan_data, by = c("region" = "administrative_area_level_2"))
+
+# Create the faceted map plot
+ggplot(map_data_combined, aes(x = long, y = lat, group = group, fill = facial_coverings_group)) +
+  geom_polygon(color = "black") +
+  coord_fixed(1.3) + 
+  labs(title = "Facial Coverings Policy During Covid",
+       fill = "Facial Coverings Policy",
+       x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  scale_fill_manual(values = c("No Policy" = "darkgreen",
+                                "Recommended" = "skyblue",
+                                "Required in Some Spaces" = "blue",
+                                "Required in All Shared Spaces" = "orange",
+                                "Required Outside Home" = "red")) +
+  facet_wrap(~date, ncol = 2)
+```
+
+
+```{r, echo=TRUE, warning=FALSE}
+# Filter data for July 1st and January 1st again, but for school closing policies
+school_closing_data <- df_us_states %>%
+  filter(date %in% as.Date(c("2020-07-01", "2021-01-01", "2021-07-01", 
+                             "2022-01-01", "2022-07-01"))) %>%
+  select(administrative_area_level_2, date, school_closing)
+
+# Convert state names to lowercase
+school_closing_data$administrative_area_level_2 <- tolower(school_closing_data$administrative_area_level_2)
+
+# Add a grouping column for school closing
+school_closing_data$school_closing_group <- factor(school_closing_data$school_closing,
+                                                   levels = 0:3,
+                                                   labels = c("No Measures", 
+                                                              "Recommend Closing or Alterations", 
+                                                              "Require Closing (Some Levels)", 
+                                                              "Require Closing (All Levels)"))
+
+# Merge with map data
+map_data_school <- us_states %>%
+  left_join(school_closing_data, by = c("region" = "administrative_area_level_2"))
+
+# Create faceted map plot
+ggplot(map_data_school, aes(x = long, y = lat, group = group, fill = school_closing_group)) +
+  geom_polygon(color = "black") +
+  coord_fixed(1.3) +
+  labs(title = "School Closing Policies During Covid",
+       fill = "School Closing Policy",
+       x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  scale_fill_manual(values = c("No Measures" = "darkgreen",
+                                "Recommend Closing or Alterations" = "skyblue",
+                                "Require Closing (Some Levels)" = "orange",
+                                "Require Closing (All Levels)" = "red")) +
+  facet_wrap(~date, ncol = 2)
+
+```
+
+
+```{r, echo=TRUE, warning=FALSE}
+# Filter data for July 1st and January 1st again, but for workplace closing policies
+workplace_closing_data <- df_us_states %>%
+  filter(date %in% as.Date(c("2020-07-01", "2021-01-01", "2021-07-01", 
+                             "2022-01-01", "2022-07-01"))) %>%
+  select(administrative_area_level_2, date, workplace_closing)
+
+# Convert state names to lowercase
+workplace_closing_data$administrative_area_level_2 <- tolower(workplace_closing_data$administrative_area_level_2)
+
+# Add a grouping column for workplace closing
+workplace_closing_data$workplace_closing_group <- factor(workplace_closing_data$workplace_closing,
+                                                         levels = 0:3,
+                                                         labels = c("No Measures", 
+                                                                    "Recommend Closing or Alterations", 
+                                                                    "Require Closing (Some Sectors)", 
+                                                                    "Require Closing (All-But-Essential)"))
+
+# Merge with map data
+map_data_workplace <- us_states %>%
+  left_join(workplace_closing_data, by = c("region" = "administrative_area_level_2"))
+
+# Create faceted map plot
+ggplot(map_data_workplace, aes(x = long, y = lat, group = group, fill = workplace_closing_group)) +
+  geom_polygon(color = "black") +
+  coord_fixed(1.3) +
+  labs(title = "Workplace Closing Policies During Covid",
+       fill = "Workplace Closing Policy",
+       x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  scale_fill_manual(values = c("No Measures" = "darkgreen",
+                                "Recommend Closing or Alterations" = "skyblue",
+                                "Require Closing (Some Sectors)" = "orange",
+                                "Require Closing (All-But-Essential)" = "red")) +
+  facet_wrap(~date, ncol = 2)
+```
+```{r, echo=TRUE, warning=FALSE, fig.width=8, fig.height=8}
+# Filter the data for July 1st, 2020
+snapshot_data <- df_us_states %>%
+  filter(date == as.Date("2020-07-01")) %>%
+  select(administrative_area_level_2, confirmed, deaths, school_closing, workplace_closing, stay_home_restrictions, facial_coverings)
+
+# Make sure categorical variables are numeric
+snapshot_data <- snapshot_data %>%
+  mutate(
+    school_closing = as.numeric(as.factor(school_closing)),
+    workplace_closing = as.numeric(as.factor(workplace_closing)),
+    stay_home_restrictions = as.numeric(as.factor(stay_home_restrictions)),
+    facial_coverings = as.numeric(as.factor(facial_coverings))
+  )
+
+# Set the states as row names
+heatmap_data <- snapshot_data %>%
+  column_to_rownames(var = "administrative_area_level_2")
+
+
+# Create the heatmap
+pheatmap(
+  heatmap_data,
+  scale = "column",
+  cluster_rows = T, cluster_cols = T,
+  angle_col = 45,
+  show_colnames = T, show_rownames = F,
+  main = "Heatmap of COVID-19 Metrics on July 1st, 2020",
+  col = brewer.pal(10, 'RdYlBu'),
+  legend = FALSE
+)
+```
+I really wanted to use a heatmap, especially because it was what we did our presentation on, but it just didn't work out that way. I still want to do some sort of clustering
+
+```{r, echo=TRUE, warning=FALSE, fig.width=8}
+# Filter the data for July 1st, 2020 and select only the 4 relevant columns
+snapshot_data <- df_us_states %>%
+  filter(date == as.Date("2020-07-01")) %>%
+  select(administrative_area_level_2, school_closing, workplace_closing, stay_home_restrictions, facial_coverings)
+
+# Make sure categorical variables are numeric
+snapshot_data <- snapshot_data %>%
+  mutate(
+    school_closing = as.numeric(as.factor(school_closing)),
+    workplace_closing = as.numeric(as.factor(workplace_closing)),
+    stay_home_restrictions = as.numeric(as.factor(stay_home_restrictions)),
+    facial_coverings = as.numeric(as.factor(facial_coverings))
+  )
+
+# Remove the "administrative_area_level_2" column and set states as row names
+heatmap_data <- snapshot_data %>%
+  select(-administrative_area_level_2) %>%
+  as.data.frame()
+
+# Set row names to the states (administrative_area_level_2)
+rownames(heatmap_data) <- snapshot_data$administrative_area_level_2
+
+# Perform hclust on the rows based on the 4 policies
+hclust_result <- hclust(dist(heatmap_data))
+
+# Plot the dendrogram with the state names
+plot(hclust_result, 
+     main = "Dendrogram of US States (Policies)", 
+     xlab = "", 
+     sub = "", 
+     cex = 0.9, 
+     labels = rownames(heatmap_data))
+```
+This is a basic clustering to test my idea. Now I scale it so we have actual better clusters.
+
+
+```{r, echo=TRUE, warning=FALSE, fig.width=8}
+# Filter the data for the specified dates and select only the relevant columns
+snapshot_data <- df_us_states %>%
+  filter(date %in% as.Date(c("2020-07-01", "2021-01-01", "2021-07-01", "2022-01-01", "2022-07-01"))) %>%
+  select(administrative_area_level_2, date, school_closing, workplace_closing, stay_home_restrictions, facial_coverings)
+
+# Make sure categorical variables are numeric
+snapshot_data <- snapshot_data %>%
+  mutate(
+    school_closing = as.numeric(as.factor(school_closing)),
+    workplace_closing = as.numeric(as.factor(workplace_closing)),
+    stay_home_restrictions = as.numeric(as.factor(stay_home_restrictions)),
+    facial_coverings = as.numeric(as.factor(facial_coverings))
+  )
+
+# Reshape the data so that each state only appears once, with columns for each date's values
+snapshot_data_wide <- snapshot_data %>%
+  pivot_wider(
+    names_from = date,
+    values_from = c(school_closing, workplace_closing, stay_home_restrictions, facial_coverings),
+    names_glue = "{.value}_{format(date, '%Y-%m-%d')}"
+  )
+
+# Remove the "administrative_area_level_2" column for clustering
+heatmap_data <- snapshot_data_wide %>%
+  select(-administrative_area_level_2)
+
+# Perform hclust on the rows based on the 4 policies across the 5 dates
+hclust_result <- hclust(dist(heatmap_data))
+
+# Plot the dendrogram with the state names
+plot(hclust_result, 
+     main = "Clustering of US States Based on COVID-19 Policies", 
+     xlab = "", 
+     sub = "", 
+     cex = 0.9, 
+     labels = snapshot_data_wide$administrative_area_level_2)
+```
+
+
+```{r, echo=TRUE, warning=FALSE}
+# Calculate the US average for confirmed cases per population by date
+us_average <- aggregate((confirmed / population) ~ date, data = df_us_states, mean, na.rm = TRUE)
+colnames(us_average) <- c("date", "confirmed_per_population")
+
+# Update state group for coloring 
+highlight_states <- c("Alaska", "American Samoa", "Rhode Island")
+df_us_states$state_group <- ifelse(df_us_states$administrative_area_level_2 %in% highlight_states, 
+                                    df_us_states$administrative_area_level_2, "Other")
+
+# Create the plot
+ggplot() +
+  # Add state-level lines
+  geom_line(data = df_us_states, 
+            aes(x = date, y = (confirmed / population), 
+                color = state_group, group = administrative_area_level_2), 
+            size = 1, alpha = 0.7) +
+  # Add US average line
+  geom_line(data = us_average, 
+            aes(x = date, y = confirmed_per_population, color = "United States"), 
+            size = 1) +
+  # Labels and theme
+  labs(title = "Confirmed Covid Cases by Population Over Time by US State", 
+       x = "Date", 
+       y = "Confirmed Cases per Population") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_date(date_labels = "%Y",
+               date_breaks = "1 year",
+               limits = as.Date(c("2020-01-01", "2023-06-30"))) +
+  # Custom colors for states and US average
+  scale_color_manual(values = c("Alaska" = "blue", 
+                                 "American Samoa" = "coral", 
+                                 "Rhode Island" = "darkgreen", 
+                                 "United States" = "purple", 
+                                 "Other" = "gray"),
+                     breaks = c("Alaska", "American Samoa", "Rhode Island", "United States"),
+                     labels = c("Alaska", "American Samoa", "Rhode Island", "US Average")) +
+  guides(color = guide_legend(title = "State"))
+```
+Here's that graph I mentioned earlier with the US Average and a couple high confirmed/population states. Turns out I copied it down here. This was before I remove the territories, so American Samoa is still in there as it was way below every other state/territory when I originally ran this.
+
+```{r, echo=TRUE, warning=FALSE}
+# Load a state shapefile
+states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE))
+
+# Create a clustering data frame
+state_clusters <- data.frame(
+  state = tolower(c(
+    "North Carolina", 
+    "Hawaii", "Louisiana", "Colorado", "California", "New York", 
+    "Maryland", "District of Columbia",
+    "Oklahoma", "Kansas", "New Hampshire", "North Dakota", "Iowa",
+    "West Virginia", "Kentucky", "Texas", "Tennessee", "Idaho",
+    "Illinois", "Minnesota", "Nevada", "Mississippi", "South Carolina",
+    "Florida", "Missouri", "Arizona", "Montana", "Wyoming", "South Dakota",
+    "Wisconsin", "Alabama", "Ohio", "New Jersey", "Maine", "Virginia",
+    "Indiana", "Georgia", "Nebraska", "Utah", "Alaska", "Oregon", 
+    "New Mexico", "Washington", "Connecticut", "Arkansas", "Delaware",
+    "Massachusetts", "Vermont", "Michigan", "Rhode Island", "Pennsylvania"
+  )),
+  cluster = c(
+    1, 
+    rep(2, 7), 
+    rep(3, 10), 
+    rep(4, 13), 
+    rep(5, 8), 
+    rep(6, 12)
+  )
+)
+
+
+# Merge state clusters with the shapefile
+states$cluster <- state_clusters$cluster[match(states$ID, state_clusters$state)]
+
+# Plot with ggplot2
+ggplot(states) +
+  geom_sf(aes(fill = as.factor(cluster)), color = "black", size = 0.1) +
+  scale_fill_brewer(palette = "Set3", name = "Cluster") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  labs(
+    title = "Clustering of US States"
+  )
+```
+Originally, I just wanted to see what 6 clusters would look like
+
+
+```{r, echo=TRUE, warning=FALSE}
+silhouette_score <- function(k) {
+  clustering <- cutree(hclust(dist(heatmap_data)), k)
+  silhouette_result <- silhouette(clustering, dist(heatmap_data))
+  mean(silhouette_result[, 3])  # Average silhouette width
+}
+
+silhouette_values <- sapply(2:20, silhouette_score)
+
+# Create a data frame with k values and corresponding silhouette scores
+silhouette_data <- data.frame(
+  k = 2:20,
+  silhouette_width = silhouette_values
+)
+
+# Create the plot
+ggplot(silhouette_data, aes(x = k, y = silhouette_width)) +
+  geom_point(aes(color = k == 2), size = 3) +  
+  scale_color_manual(values = c("black", "red")) + 
+  geom_line() +  
+  labs(
+    x = "Number of Clusters (k)",
+    y = "Average Silhouette Width",
+    title = "Silhouette Method for Optimal k"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+But then it made sense to find the actual best number of clusters, which is 2.
+
+```{r, echo=TRUE, warning=FALSE}
+# Optimal k = 2
+optimal_k <- 2
+clustering <- cutree(hclust(dist(heatmap_data)), optimal_k)
+
+# Compute silhouette scores
+silhouette_result <- silhouette(clustering, dist(heatmap_data))
+
+# Create a data frame with states and silhouette scores
+low_silhouette <- data.frame(
+  state = rownames(heatmap_data),
+  silhouette_score = silhouette_result[, 3]
+)
+
+# Filter states with low silhouette scores (threshold < 0.1)
+low_confidence_states <- low_silhouette %>%
+  filter(silhouette_score < 0.1) %>%
+  arrange(silhouette_score)
+
+# View the result
+print(low_confidence_states)
+```
+
+```{r, echo=TRUE, warning=FALSE}
+# Filter the data for the specified dates and select only the relevant columns
+snapshot_data <- df_us_states %>%
+  filter(date %in% as.Date(c("2020-07-01", "2021-01-01", "2021-07-01", "2022-01-01", "2022-07-01"))) %>%
+  select(administrative_area_level_2, date, school_closing, workplace_closing, stay_home_restrictions, facial_coverings)
+
+# Make sure categorical variables are numeric
+snapshot_data <- snapshot_data %>%
+  mutate(
+    school_closing = as.numeric(as.factor(school_closing)),
+    workplace_closing = as.numeric(as.factor(workplace_closing)),
+    stay_home_restrictions = as.numeric(as.factor(stay_home_restrictions)),
+    facial_coverings = as.numeric(as.factor(facial_coverings))
+  )
+
+# Reshape the data so that each state only appears once, with columns for each date's values
+snapshot_data_wide <- snapshot_data %>%
+  pivot_wider(
+    names_from = date,
+    values_from = c(school_closing, workplace_closing, stay_home_restrictions, facial_coverings),
+    names_glue = "{.value}_{format(date, '%Y-%m-%d')}"
+  )
+
+# Remove the "administrative_area_level_2" column for clustering
+heatmap_data <- snapshot_data_wide %>%
+  select(-administrative_area_level_2)
+
+# Perform hclust on the rows (states) based on the 4 policies across the 5 dates
+hclust_result <- hclust(dist(heatmap_data))
+
+# Cut the dendrogram to obtain 2 clusters
+clusters <- cutree(hclust_result, k = 2)
+
+# Add the cluster labels to the original data
+snapshot_data_wide$cluster <- clusters
+
+# Plot the dendrogram with the state names
+plot(hclust_result, 
+     main = "Clustering of US States Based on COVID-19 Policies", 
+     xlab = "", 
+     sub = "", 
+     cex = 0.9, 
+     labels = snapshot_data_wide$administrative_area_level_2)
+
+# Display the resulting clusters
+snapshot_data_wide %>%
+  select(administrative_area_level_2, cluster)
+
+```
+This helped me see what our clustering looks like with our optimal 2 clusters.
+
+```{r, echo=TRUE, warning=FALSE}
+# Adjust margins for a better view
+par(mar = c(2, 4, 4, 2))
+
+# Rescale the y-axis and plot the dendrogram
+plot(hclust_result, 
+     main = "Clustering of US States Based on COVID-19 Policies", 
+     xlab = "", 
+     sub = "", 
+     cex = 0.7,                    
+     labels = snapshot_data_wide$administrative_area_level_2,
+     hang = -1,                    
+     ylim = c(0, max(hclust_result$height) * 2), 
+     yaxt = "n")                   
+
+# Add a larger y-axis
+axis(2, at = seq(0, max(hclust_result$height) * 2, by = 1), las = 1, cex.axis = 0.8)
+```
+
+
+```{r, echo=TRUE, warning=FALSE}
+# Define the state names and their respective clusters
+state_clusters <- data.frame(
+  state = tolower(c(
+    "Minnesota", "California", "Florida", "Wyoming", "South Dakota", "Kansas",
+    "Nevada", "Virginia", "Washington", "Oregon", "Wisconsin", "New Jersey",
+    "Rhode Island", "Vermont", "North Carolina", "Oklahoma", "Alabama", "Delaware",
+    "Missouri", "Utah", "Mississippi", "Connecticut", "Indiana", "Georgia", "Texas",
+    "Pennsylvania", "Massachusetts", "Maine", "Tennessee", "Michigan", "Idaho", "Illinois",
+    "Louisiana", "New Mexico", "Arizona", "Arkansas", "Nebraska", "West Virginia", "South Carolina",
+    "New York", "District of Columbia", "Kentucky", "Ohio", "Alaska", "New Hampshire", "North Dakota",
+    "Iowa", "Montana", "Hawaii", "Maryland", "Colorado"
+  )),
+  cluster = c(
+    1, 2, 1, 1, 1, 1, 1, 2, 2, 2, 1, 2, 2, 2, 1, 1, 1, 2, 1, 2, 1, 2, 2, 2, 1, 2, 2, 
+    2, 1, 2, 1, 1, 2, 2, 1, 2, 2, 1, 1, 2, 2, 1, 2, 2, 1, 1, 1, 1, 2, 2, 2
+  )
+)
+
+# Load the shapefile for US states
+states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE))
+
+# Merge state clusters with the shapefile
+states$cluster <- state_clusters$cluster[match(tolower(states$ID), state_clusters$state)]
+
+# Plot the map
+ggplot(states) +
+  geom_sf(aes(fill = as.factor(cluster)), color = "black", size = 0.1) +
+  scale_fill_manual(values = c("coral", "skyblue"), name = "Cluster") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  labs(
+    title = "Clustering of US States Based on COVID-19 Policies"
+  )
+```
+And here's our final clustering!
+
+
+```{r, echo=TRUE, warning=FALSE}
+# Load required libraries
+library(sf)
+library(ggplot2)
+library(dplyr)
+
+# Load the shapefile for US states using the `maps` package
+states <- st_as_sf(maps::map("state", plot = FALSE, fill = TRUE))
+
+# Create a data frame with voting results
+state_votes <- data.frame(
+  region = tolower(c("Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", 
+                     "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho", 
+                     "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", 
+                     "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", 
+                     "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", 
+                     "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", 
+                     "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", 
+                     "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", 
+                     "Washington", "West Virginia", "Wisconsin", "Wyoming", "District of Columbia")),
+  vote = c("red", "red", "blue", "red", "blue", "blue", 
+           "blue", "blue", "red", "blue", "blue", "red", 
+           "blue", "red", "red", "red", "red", "red", 
+           "blue", "blue", "blue", "blue", "blue", "red", 
+           "red", "red", "red", "blue", "blue", "blue", 
+           "blue", "blue", "red", "red", "red","red", "blue", 
+           "blue", "blue", "red", "red","red", "red", "red", 
+           "blue", "blue", "blue", "red", "blue", "red", "blue")
+)
+
+# Merge voting results with the state map
+states$vote <- state_votes$vote[match(tolower(states$ID), state_votes$region)]
+
+# Plot the map
+ggplot(states) +
+  geom_sf(aes(fill = vote), color = "black", size = 0.1) +
+  scale_fill_manual(values = c("red" = "coral", "blue" = "skyblue"),
+                    labels = c("Democrat", "Republican"),
+                    name = "Party") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid = element_blank()) +
+  labs(
+    title = "2020 U.S. Presidential Election Results by State"
+  )
+
+```
+
+
+# References:
