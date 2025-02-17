@@ -7,7 +7,7 @@ Final Project with code written in R and final paper written in LaTeX to Cluster
 ## Contents
 * [`Final Report`](./DATA607_Final_Project_Powell-120456237.pdf): Final Report showing findings and conclusions
 * [`R Code`](./Final_Project_Code.Rmd): R Markdown file with Code
-* [`Slides`](./DATA607 - Final Project Slides.pdf): Slides for 3 minute presentation
+* [`Slides`](./DATA607%20-%20Final%20Project%20Slides.pdf): Slides for 3 minute presentation
 
 ## Data
 Our data was sourced from Emanuele Guidotti and David Ardia’s COVID19 data hub published in the Journal of Open Source Software in 2020.
